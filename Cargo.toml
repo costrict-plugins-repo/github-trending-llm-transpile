@@ -1,0 +1,116 @@
+[package]
+name         = "llm-transpile"
+version      = "0.4.6"
+edition      = "2024"
+description  = "High-performance LLM context bridge — token-optimized document transpiler"
+rust-version = "1.92"
+license      = "Apache-2.0"
+readme       = "README.md"
+repository   = "https://github.com/epicsagas/llm-transpile"
+homepage     = "https://github.com/epicsagas/llm-transpile"
+authors      = ["epicsagas"]
+keywords     = ["llm", "tokenizer", "markdown", "compression", "rag"]
+categories   = ["text-processing", "command-line-utilities", "encoding"]
+autobins     = false
+exclude      = [
+    "eval/dataset/html/*",
+    "eval/dataset/multilingual/*",
+    "eval/dataset/plaintext/*",
+    "eval/dataset/hf/*",
+    "eval/dataset/policy/*",
+    "eval/ab_test.sh",
+    "eval/quality_bench.py",
+    "eval/quality_bench_results.json",
+]
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/transpile-{ target }.tar.gz"
+pkg-fmt = "tgz"
+bin-dir = "{ bin }"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-url = "{ repo }/releases/download/v{ version }/transpile-{ target }.zip"
+pkg-fmt = "zip"
+bin-dir = "transpile.exe"
+
+[package.metadata.wix]
+upgrade-guid = "113D8780-6A48-4BA3-8FC0-3613FE1661AB"
+path-guid = "237664C0-D802-4791-8C8F-F34B342447DA"
+license = false
+eula = false
+
+# ── Feature flags ──────────────────────────────────────────────────────────────
+# tiktoken: enables accurate token counting via OpenAI's cl100k_base tokenizer.
+#   Off by default to keep the dependency footprint minimal.
+#   Trade-off: adds ~5 MB to the binary and increases compile time significantly.
+#   Recommended for production pipelines where token-budget accuracy is critical.
+[features]
+default  = []
+tiktoken = ["dep:tiktoken-rs"]
+
+[lib]
+name = "llm_transpile"
+path = "src/lib.rs"
+
+[dependencies]
+# 파싱
+pulldown-cmark = "0.13"
+
+# 토큰 카운팅 (optional — tiktoken feature)
+tiktoken-rs = { version = "0.12", optional = true }
+
+# 직렬화
+serde       = { version = "1", features = ["derive"] }
+serde_json  = "1"
+
+# 비동기
+tokio        = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures      = "0.3"
+
+# 유틸
+aho-corasick = "1"
+ammonia    = "4"
+regex      = "1"
+once_cell  = "1"
+itertools  = "0.15"
+thiserror  = "2"
+clap       = { version = "4", features = ["derive"] }
+
+[dev-dependencies]
+tokio     = { version = "1", features = ["full", "test-util"] }
+criterion = { version = "0.8", features = ["html_reports"] }
+
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
+
+[[bin]]
+name = "transpile"
+path = "src/bin/transpile.rs"
+
+[[example]]
+name = "eval"
+path = "eval/eval.rs"
+# The eval harness measures token reduction with the *real* cl100k BPE
+# tokenizer (the heuristic alone is self-referential — see src/lib.rs
+# `pua_real_token_cost_is_documented`). It therefore requires the tiktoken
+# feature. `make eval` runs `cargo run --example eval --features tiktoken`.
+required-features = ["tiktoken"]
+
+[[example]]
+name = "test_docs"
+path = "eval/test_docs.rs"
+
+[[bench]]
+name    = "transpile_bench"
+harness = false
